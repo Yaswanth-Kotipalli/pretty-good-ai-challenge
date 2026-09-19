@@ -8,6 +8,7 @@ grades first ("we listen to the voice calls your bot made").
 """
 import json
 import logging
+import os
 from pathlib import Path
 
 from flask import Flask, Response, request
@@ -99,7 +100,8 @@ def create_app(settings=None):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    create_app().run(host="0.0.0.0", port=5000)
+    port = int(os.getenv("PORT", "5000"))
+    create_app().run(host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

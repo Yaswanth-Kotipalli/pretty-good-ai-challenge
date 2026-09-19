@@ -12,6 +12,10 @@ when the clinic agent starts speaking over our bot, our bot yields -- that
 flag controls whether the remote party may interrupt our playback, and
 disabling it is what causes talk-over.
 """
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import asyncio
 import json
 import logging

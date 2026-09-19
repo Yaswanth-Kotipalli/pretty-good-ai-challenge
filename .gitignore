@@ -16,3 +16,9 @@ build/
 # are committed as deliverables required by the assessment.
 recordings/pending.jsonl
 
+# Logs generated during call runs
+logs/
+
+# Test execution manifests & findings
+reports/
+

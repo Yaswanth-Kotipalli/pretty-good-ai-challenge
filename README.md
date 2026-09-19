@@ -148,36 +148,53 @@ ANALYZER_MODEL=gpt-4o-mini
 
 ## Running the Simulator
 
-Running test calls requires two background services (the Twilio webhook server + tunnel, and the LiveKit worker) followed by the call runner.
+### Quickstart (Single Command)
 
-### Step 1: Start Webhook Server & Tunnel (Terminal 1)
+A complete test call can be executed with a single command. The script automatically launches `cloudflared`, updates `PUBLIC_BASE_URL` in `.env`, starts the webhook server and LiveKit worker, verifies health, places the call, and tears down background processes on exit:
+
 ```bash
+# Test call to your mobile number (dry-run)
+./scripts/run_call.sh book_physical --test-number +1XXXXXXXXXX
+
+# Official call to the assessment line (+1-805-439-8008)
+./scripts/run_call.sh book_physical
+```
+
+---
+
+### Manual Setup (Debugging Fallback)
+
+If you prefer to run services in separate terminals for step-by-step inspection:
+
+#### Terminal 1: Webhook Server & Tunnel
+```bash
+# Start the Flask server (port defaults to PORT in .env or 5000 / 5050 on macOS)
 python -m pgai_challenge.server
-# In another tab or background process:
-ngrok http 5000
-# Ensure PUBLIC_BASE_URL in .env matches your active ngrok https URL!
+
+# In another process, start your tunnel:
+cloudflared tunnel --url http://localhost:5050
+# OR: ngrok http 5050
+# IMPORTANT: Update PUBLIC_BASE_URL in .env with the generated https URL!
 ```
 
-### Step 2: Start LiveKit Worker (Terminal 2)
+#### Terminal 2: LiveKit Worker
 ```bash
-python -m pgai_challenge.worker
+python -m pgai_challenge.worker start
 ```
 
-### Step 3: Execute Test Calls (Terminal 3)
-
+#### Terminal 3: Execute Test Calls
 ```bash
-# List all 14 scenarios
+# List all scenarios
 python -m pgai_challenge.runner --list
 
-# Run a single scenario (e.g., annual physical)
-python -m pgai_challenge.runner --scenario book_physical
+# Run single scenario
+python -m pgai_challenge.runner --scenario book_physical --test-number +1XXXXXXXXXX
 
-# Run all 14 scenarios sequentially with a 20s cooldown
+# Run all scenarios sequentially with a 20s cooldown
 python -m pgai_challenge.runner --all --delay 20
 ```
 
-### Step 4: Download Audio Recordings & Generate Bug Report
-
+#### Terminal 4: Download Audio Recordings & Analyze Transcripts
 ```bash
 # Download dual-channel MP3 call recordings from Twilio
 python -m pgai_challenge.recording
