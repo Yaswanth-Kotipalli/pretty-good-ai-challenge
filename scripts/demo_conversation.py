@@ -245,7 +245,7 @@ def main():
         model = (
             args.model
             if args.model != "gpt-4o-mini"
-            else "gemini-2.0-flash"
+            else "gemini-3.6-flash"
         )
     else:
         print("[Engine: OpenAI]")

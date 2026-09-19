@@ -58,7 +58,7 @@ class Settings:
     test_phone_number: str = ""
     # Model choices
     llm_provider: str = ""  # "openai" or "google"; auto-detected if empty
-    llm_model: str = ""  # default depends on provider (gpt-4o-mini or gemini-2.0-flash)
+    llm_model: str = ""  # default depends on provider (gpt-4o-mini or gemini-3.6-flash)
     analyzer_model: str = "gpt-4o-mini"
     tts_voice: str = ""  # provider-specific voice id; empty = plugin default
     max_call_seconds: int = MAX_CALL_SECONDS
@@ -115,9 +115,9 @@ def load_settings() -> Settings:
         settings.llm_provider = "google" if (settings.gemini_api_key and not settings.openai_api_key) else "openai"
 
     if not settings.llm_model:
-        settings.llm_model = "gemini-2.0-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
+        settings.llm_model = "gemini-3.6-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
 
     if not settings.analyzer_model:
-        settings.analyzer_model = "gemini-2.0-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
+        settings.analyzer_model = "gemini-3.6-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
 
     return settings

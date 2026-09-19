@@ -51,3 +51,30 @@ def test_openai_configured_builds_openai_tts():
     tts = build_tts(settings, scenario)
     assert tts is not None
     assert "openai" in tts.__class__.__module__
+
+
+def test_gemini_default_model_is_gemini_3_6_flash(monkeypatch):
+    from pgai_challenge.config import load_settings
+
+    env = {
+        "TWILIO_ACCOUNT_SID": "ACxxx",
+        "TWILIO_AUTH_TOKEN": "tok",
+        "TWILIO_CALLER_NUMBER": "+13334445555",
+        "LIVEKIT_URL": "wss://x.livekit.cloud",
+        "LIVEKIT_API_KEY": "k",
+        "LIVEKIT_API_SECRET": "s",
+        "SIP_HOST": "x.sip.livekit.cloud",
+        "DEEPGRAM_API_KEY": "dg",
+        "PUBLIC_BASE_URL": "https://test.ngrok-free.app",
+        "GEMINI_API_KEY": "AIzaSyTestKey",
+    }
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("ANALYZER_MODEL", raising=False)
+
+    settings = load_settings()
+    assert settings.llm_provider == "google"
+    assert settings.llm_model == "gemini-3.6-flash"
+    assert settings.analyzer_model == "gemini-3.6-flash"

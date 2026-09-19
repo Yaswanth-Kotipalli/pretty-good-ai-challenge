@@ -171,6 +171,24 @@ async def entrypoint(ctx: JobContext):
         ),
     )
 
+    @session.on("error")
+    def on_session_error(ev):
+        source = getattr(ev, "source", None)
+        err = getattr(ev, "error", ev)
+        underlying = getattr(err, "error", None) or getattr(err, "exception", None) or err
+        component = (
+            getattr(source, "__class__", type(source)).__name__
+            if source is not None
+            else "pipeline"
+        )
+        logger.error(
+            "session error in component %s: %s (source: %r, detail: %r)",
+            component,
+            underlying,
+            source,
+            err,
+        )
+
     call_start = datetime.now(timezone.utc)
     transcript_path = transcripts.new_transcript(scenario_id)
     pump_stop = asyncio.Event()
