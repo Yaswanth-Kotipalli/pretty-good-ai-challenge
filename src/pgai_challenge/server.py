@@ -6,6 +6,10 @@ where the patient agent (LiveKit Agents, pipeline mode) is already waiting.
 Twilio also records both sides of the call, which is what the challenge
 grades first ("we listen to the voice calls your bot made").
 """
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import json
 import logging
 import os

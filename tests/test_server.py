@@ -55,3 +55,23 @@ def test_recording_callback_queues_download():
               "RecordingUrl": "https://api.twilio.com/x"},
     )
     assert resp.status_code == 204
+
+
+def test_server_port_from_env_is_respected(monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setenv("PORT", "5050")
+    mock_app = MagicMock()
+    with patch.object(server, "create_app", return_value=mock_app):
+        server.main()
+        mock_app.run.assert_called_once_with(host="0.0.0.0", port=5050)
+
+
+def test_server_default_port_is_5000(monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.delenv("PORT", raising=False)
+    mock_app = MagicMock()
+    with patch.object(server, "create_app", return_value=mock_app):
+        server.main()
+        mock_app.run.assert_called_once_with(host="0.0.0.0", port=5000)

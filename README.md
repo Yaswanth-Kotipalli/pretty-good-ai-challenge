@@ -62,7 +62,9 @@ Per the challenge specifications:
 6. **Incremental Crash-Proof Transcripts**:
    An asynchronous pump flushes observed dialogue turns to disk every 2 seconds with call-relative elapsed time offsets (`[M:SS]`), enabling exact citation in bug reports (e.g., `transcript-07.txt at 1:23`).
 7. **Hardcoded Dial Safety Guardrail**:
-   `assert_safe_to_dial()` is executed synchronously immediately before initiating any outbound call. If any destination other than `+1-805-439-8008` is passed, execution aborts with `UnsafeDialError`.
+   `assert_safe_to_dial()` is executed synchronously immediately before initiating any outbound call. If any destination other than `+1-805-439-8008` (or an explicitly passed `--test-number`) is dialed, execution aborts with `UnsafeDialError`.
+8. **Origin-Before-Tunnel Ordering (Anti-502 Resilience)**:
+   A public tunnel started against a missing or restarting local origin produces persistent `502 Bad Gateway` errors. Flask must always bind and pass its `/health` check on `127.0.0.1:$PORT` *before* the public tunnel attaches. Using a permanent ngrok static domain removes the need to rewrite `.env` or restart Flask mid-run.
 
 ---
 
@@ -94,10 +96,11 @@ Per the challenge specifications:
 - A [Twilio](https://www.twilio.com/) account with 1 phone number (E.164 format)
 - A [LiveKit Cloud](https://cloud.livekit.io/) project (SIP inbound trunk routing to room `pgai-test`)
 - [Deepgram](https://deepgram.com/) API key
-- [OpenAI](https://platform.openai.com/) API key
-- [ngrok](https://ngrok.com/) (or another public HTTPS tunnel)
+- [Cartesia](https://cartesia.ai/) API key (preferred TTS) or [OpenAI](https://platform.openai.com/) API key
+- [Google Gemini](https://aistudio.google.com/) API key (or OpenAI) for LLM
+- [ngrok](https://ngrok.com/) CLI with a free permanent static domain
 
-### 1. Environment Setup
+### 1. Environment & Dependencies
 
 ```bash
 # Clone the repository
@@ -116,7 +119,25 @@ pip install -e .
 cp .env.example .env
 ```
 
-### 2. Configure `.env`
+### 2. One-Time ngrok Static Domain Setup
+
+ngrok's free tier includes 1 permanent static domain that never changes:
+
+1. Install ngrok:
+   ```bash
+   brew install ngrok/ngrok/ngrok  # macOS
+   ```
+2. Connect your ngrok account:
+   ```bash
+   ngrok config add-authtoken <YOUR_NGROK_AUTHTOKEN>
+   ```
+3. Claim your free static domain at [dashboard.ngrok.com -> Domains](https://dashboard.ngrok.com/cloud-edge/domains) (e.g. `your-name.ngrok-free.app`).
+4. Set it once in `.env`:
+   ```ini
+   PUBLIC_BASE_URL=https://your-name.ngrok-free.app
+   ```
+
+### 3. Configure `.env`
 Edit `.env` and fill in your credentials:
 ```ini
 # Twilio
@@ -129,19 +150,17 @@ LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=your_api_key
 LIVEKIT_API_SECRET=your_api_secret
 SIP_HOST=your-project.sip.livekit.cloud
-SIP_TRUNK_USER=
-SIP_TRUNK_PASSWORD=
 
 # Pipeline Providers
 DEEPGRAM_API_KEY=your_deepgram_key
-OPENAI_API_KEY=your_openai_key
+GEMINI_API_KEY=your_gemini_key
+CARTESIA_API_KEY=your_cartesia_key  # or OPENAI_API_KEY
 
-# Public Webhook Tunnel URL (no trailing slash)
-PUBLIC_BASE_URL=https://your-subdomain.ngrok-free.app
+# Permanent Static Tunnel URL (set once, never rewritten)
+PUBLIC_BASE_URL=https://your-name.ngrok-free.app
 
-# Models
-LLM_MODEL=gpt-4o-mini
-ANALYZER_MODEL=gpt-4o-mini
+# Port (macOS users typically use 5050 to avoid AirPlay Receiver on 5000)
+PORT=5050
 ```
 
 ---
@@ -150,7 +169,7 @@ ANALYZER_MODEL=gpt-4o-mini
 
 ### Quickstart (Single Command)
 
-A complete test call can be executed with a single command. The script automatically launches `cloudflared`, updates `PUBLIC_BASE_URL` in `.env`, starts the webhook server and LiveKit worker, verifies health, places the call, and tears down background processes on exit:
+A complete test call can be executed with a single command. The script ensures `$PORT` is free, starts Flask first, connects your permanent ngrok tunnel second, verifies end-to-end health, registers the LiveKit worker, places the call, and tears down all background processes on exit:
 
 ```bash
 # Test call to your mobile number (dry-run)
@@ -164,42 +183,42 @@ A complete test call can be executed with a single command. The script automatic
 
 ### Manual Setup (Debugging Fallback)
 
-If you prefer to run services in separate terminals for step-by-step inspection:
+If you prefer to run services in separate terminals for step-by-step inspection, preserve the **Flask-first, tunnel-second** ordering:
 
-#### Terminal 1: Webhook Server & Tunnel
+#### Terminal 1: Flask Webhook Server
 ```bash
-# Start the Flask server (port defaults to PORT in .env or 5000 / 5050 on macOS)
+# Start Flask FIRST so an origin is listening before ngrok attaches
 python -m pgai_challenge.server
-
-# In another process, start your tunnel:
-cloudflared tunnel --url http://localhost:5050
-# OR: ngrok http 5050
-# IMPORTANT: Update PUBLIC_BASE_URL in .env with the generated https URL!
+# Verify locally:
+curl http://127.0.0.1:5050/health
 ```
 
-#### Terminal 2: LiveKit Worker
+#### Terminal 2: ngrok Tunnel
+```bash
+# Attach ngrok to your static domain and the listening port SECOND
+ngrok http --url=your-name.ngrok-free.app 5050
+# Verify through the public URL:
+curl https://your-name.ngrok-free.app/health
+```
+
+#### Terminal 3: LiveKit Worker
 ```bash
 python -m pgai_challenge.worker start
 ```
 
-#### Terminal 3: Execute Test Calls
+#### Terminal 4: Execute Test Calls & QA Analysis
 ```bash
-# List all scenarios
-python -m pgai_challenge.runner --list
-
-# Run single scenario
+# Run a single scenario against your mobile number
 python -m pgai_challenge.runner --scenario book_physical --test-number +1XXXXXXXXXX
 
-# Run all scenarios sequentially with a 20s cooldown
+# Run official assessment call
+python -m pgai_challenge.runner --scenario book_physical
+
+# Run all 14 scenarios sequentially with cooldown
 python -m pgai_challenge.runner --all --delay 20
-```
 
-#### Terminal 4: Download Audio Recordings & Analyze Transcripts
-```bash
-# Download dual-channel MP3 call recordings from Twilio
+# Download recordings and generate bug report
 python -m pgai_challenge.recording
-
-# Run the LLM QA analysis pass over all transcripts to generate docs/bug_report.md
 python -m pgai_challenge.analyzer
 ```
 

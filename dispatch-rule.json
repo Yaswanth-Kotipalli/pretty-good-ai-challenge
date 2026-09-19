@@ -1,0 +1,6 @@
+{
+  "dispatch_rule": {
+    "name": "pgai-direct",
+    "rule": { "dispatchRuleDirect": { "roomName": "pgai-test" } }
+  }
+}
