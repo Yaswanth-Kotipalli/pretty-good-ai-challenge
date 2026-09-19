@@ -1,8 +1,8 @@
 # Patient Simulator — Pretty Good AI Engineering Challenge
 
-An automated, LLM-powered patient voice simulator built with **LiveKit Agents in pipeline mode** (Deepgram STT → GPT-4o-mini → OpenAI TTS / Cartesia, Silero VAD) that dials Pretty Good AI's assessment line (`+1-805-439-8008`) via Twilio SIP trunking.
+An automated, LLM-powered patient voice simulator built with **LiveKit Agents in pipeline mode** (Deepgram STT → GPT-4o-mini → OpenAI TTS, Silero VAD) that dials Pretty Good AI's assessment line (`+1-805-439-8008`) via Twilio SIP trunking.
 
-The bot conducts realistic, multi-turn clinical voice calls across 14 diverse scenarios—from routine appointments and refills to adversarial edge cases and safety probes—capturing dual-sided audio recordings, incremental transcripts with timestamp offsets, and generating evidence-backed bug reports.
+The bot conducts realistic, multi-turn clinical voice calls across 14 diverse scenarios—from routine appointments and refills to adversarial edge cases and safety probes—capturing dual-channel audio recordings, incremental transcripts with timestamp offsets, and generating evidence-backed bug reports.
 
 ---
 
@@ -23,8 +23,8 @@ flowchart LR
         subgraph Pipeline ["PatientAgent Worker (Pipeline Mode)"]
             STT["STT: Deepgram Nova-3"]
             VAD["VAD & Turn: Silero + Semantic TurnDetector"]
-            LLM["LLM: GPT-4o-mini (Persona Brain)"]
-            TTS["TTS: OpenAI TTS / Cartesia"]
+            LLM["LLM: GPT-4o-mini / Gemini-2.0-Flash"]
+            TTS["TTS: OpenAI TTS / Google TTS"]
             TOOL["Tool: hang_up()"]
         end
     end
@@ -41,9 +41,9 @@ flowchart LR
 
 ### Pipeline Mode vs. Prohibited Architectures
 Per the challenge specifications:
-- **Allowed & Used**: Decoupled pipeline components: STT (Deepgram `nova-3`), LLM (OpenAI `gpt-4o-mini`), TTS (OpenAI `tts-1` / Cartesia), and Silero VAD.
+- **Allowed & Used**: Decoupled pipeline components: STT (Deepgram `nova-3`), LLM (OpenAI `gpt-4o-mini`), TTS (OpenAI `tts-1`), and Silero VAD.
 - **Strictly Avoided**: No speech-to-speech / realtime models (e.g., OpenAI Realtime API, Gemini Live, LiveKit RealtimeModel plugins) and no hosted voice-agent platforms (e.g., Vapi, Retell, Bland).
-- **Telephony**: Twilio serves strictly as a PSTN carrier and call recorder (`record-from-answer`), with zero conversational logic hosted on Twilio.
+- **Telephony**: Twilio serves strictly as a PSTN carrier and call recorder (`record-from-answer-dual`), with zero conversational logic hosted on Twilio.
 
 ---
 
@@ -135,7 +135,6 @@ SIP_TRUNK_PASSWORD=
 # Pipeline Providers
 DEEPGRAM_API_KEY=your_deepgram_key
 OPENAI_API_KEY=your_openai_key
-CARTESIA_API_KEY=  # Optional: falls back to OpenAI TTS if omitted
 
 # Public Webhook Tunnel URL (no trailing slash)
 PUBLIC_BASE_URL=https://your-subdomain.ngrok-free.app
@@ -180,7 +179,7 @@ python -m pgai_challenge.runner --all --delay 20
 ### Step 4: Download Audio Recordings & Generate Bug Report
 
 ```bash
-# Download dual-sided MP3 call recordings from Twilio
+# Download dual-channel MP3 call recordings from Twilio
 python -m pgai_challenge.recording
 
 # Run the LLM QA analysis pass over all transcripts to generate docs/bug_report.md
@@ -212,7 +211,7 @@ Test suite coverage includes:
 - [x] **Iteration Log**: Record of architectural refinements from v0.1 to v0.2 in [`docs/changelog.md`](docs/changelog.md).
 - [x] **Offline Test Suite**: Comprehensive pytest suite in [`tests/`](tests/).
 - [x] **Safe Dialing Guardrails**: Zero-risk outbound call restrictions in [`src/pgai_challenge/config.py`](src/pgai_challenge/config.py).
-- [ ] **Transcripts & Recordings**: Minimum 10 complete calls with dual-sided audio (`recordings/*.mp3`) and timestamped transcripts (`transcripts/*.txt`).
+- [ ] **Transcripts & Recordings**: Minimum 10 complete calls with dual-channel audio (`recordings/*.mp3`) and timestamped transcripts (`transcripts/*.txt`).
 - [ ] **Bug Report**: Complete QA analysis in [`docs/bug_report.md`](docs/bug_report.md).
 - [ ] **Loom Video 1 (Walkthrough)**: Max 3 minutes, webcam ON, covering approach, architecture, audio sample, and findings ([plan in `docs/loom_walkthrough_plan.md`](docs/loom_walkthrough_plan.md)).
 - [ ] **Loom Video 2 (AI Debugging)**: Screen recording showcasing iterative debugging and problem-solving ([plan in `docs/loom_debug_plan.md`](docs/loom_debug_plan.md)).

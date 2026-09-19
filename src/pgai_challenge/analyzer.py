@@ -57,6 +57,18 @@ def render_transcript_for_analysis(txt_path: Path) -> str:
     return "\n".join(lines)
 
 
+def scenario_id_from_transcript(txt_path: Path) -> str:
+    """Recover the scenario id from a transcript filename.
+
+    ``transcripts.new_transcript`` names files ``<YYYYmmdd-HHMMSS>_<scenario_id>``,
+    and scenario ids themselves contain underscores (``edge_dosing_advice``), so
+    only the FIRST underscore separates the timestamp from the id. Splitting on
+    the last one too silently truncated 12 of the 14 ids into KeyErrors, which
+    dropped those calls from the bug report without an error.
+    """
+    return txt_path.stem.split("_", 1)[1]
+
+
 def analyze_transcript(
     txt_path: Path, scenario_id: str, scenario_title: str, scenario_goal: str,
     client, model: str,
@@ -107,7 +119,7 @@ def build_bug_report(
             "## Method",
             "",
             "Each call was placed by an LLM-driven patient simulator (LiveKit Agents "
-            "pipeline: Deepgram STT -> GPT-4o-mini -> Cartesia/OpenAI TTS) calling "
+            "pipeline: Deepgram STT -> GPT-4o-mini -> OpenAI TTS) calling "
             "+1-805-439-8008. Transcripts were captured from the live conversation "
             "and recordings downloaded from Twilio. Findings above were extracted by "
             "an LLM QA pass and spot-checked against the audio.",
@@ -136,8 +148,7 @@ def main() -> None:
 
     analyses = []
     for txt in txt_files:
-        # filename: <timestamp>_<scenario_id>.txt
-        scenario_id = txt.stem.split("_", 1)[1].rsplit("_", 1)[0]
+        scenario_id = scenario_id_from_transcript(txt)
         try:
             scenario = get_scenario(scenario_id)
         except KeyError:

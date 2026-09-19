@@ -42,18 +42,22 @@ def download_recording(
 
 
 def download_pending(account_sid: str, auth_token: str) -> list:
-    """Download every recording queued by the /recording-callback webhook."""
+    """Download every recording queued by the /recording-callback webhook.
+
+    Only successfully downloaded entries leave the queue. Recordings are the
+    single highest-stakes artifact in this project, so a failed download must
+    stay queued and be retryable by re-running this module -- draining the
+    queue up front would discard the only copy of the media URL.
+    """
     queue = RECORDING_DIR / "pending.jsonl"
     done = []
     if not queue.exists():
         return done
     import json
 
-    lines = queue.read_text(encoding="utf-8").splitlines()
-    queue.write_text("", encoding="utf-8")  # drain the queue
+    lines = [l for l in queue.read_text(encoding="utf-8").splitlines() if l.strip()]
+    still_pending = []
     for line in lines:
-        if not line.strip():
-            continue
         item = json.loads(line)
         dest = RECORDING_DIR / f"{item['scenario_id']}_{item['recording_sid']}.mp3"
         try:
@@ -62,7 +66,11 @@ def download_pending(account_sid: str, auth_token: str) -> list:
             )
             done.append(str(dest))
         except Exception as e:  # noqa: BLE001 - keep going, report at the end
-            print(f"FAILED {item['recording_sid']}: {e}")
+            print(f"FAILED {item['recording_sid']}: {e} (left queued, re-run to retry)")
+            still_pending.append(line)
+    queue.write_text(
+        "\n".join(still_pending) + ("\n" if still_pending else ""), encoding="utf-8"
+    )
     return done
 
 

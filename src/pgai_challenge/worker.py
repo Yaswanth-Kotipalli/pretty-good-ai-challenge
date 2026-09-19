@@ -91,13 +91,20 @@ async def entrypoint(ctx: JobContext):
     if not scenario_id:
         raise RuntimeError("job metadata must include scenario_id")
     scenario = get_scenario(scenario_id)
+    # Probes planned between calls by investigation.plan_next_call, carried in
+    # the dispatch metadata. Absent on a plain exploratory call.
+    probe_objectives = metadata.get("probe_objectives") or []
     settings = load_settings()
 
     await ctx.connect()
-    logger.info("joined room for scenario %s", scenario_id)
+    logger.info(
+        "joined room for scenario %s (%d planned probe(s))",
+        scenario_id,
+        len(probe_objectives),
+    )
 
     hangup = asyncio.Event()
-    agent = PatientAgent(scenario, hangup)
+    agent = PatientAgent(scenario, hangup, probe_objectives)
 
     if settings.llm_provider == "google":
         if google is None:
