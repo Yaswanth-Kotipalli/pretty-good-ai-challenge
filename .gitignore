@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.zip
+*.docx
+
+# Queued (not yet downloaded) recordings; downloaded .mp3s and .txt transcripts
+# are committed as deliverables required by the assessment.
+recordings/pending.jsonl
+
