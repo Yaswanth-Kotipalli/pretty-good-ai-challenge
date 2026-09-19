@@ -66,10 +66,29 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 1. Start cloudflared tunnel
+# 1. Start Flask server on $PORT (must be listening before tunnel starts)
+echo "[run_call] Starting initial Flask server on port $PORT..."
+rm -f logs/server.log
+PORT="$PORT" "$PYTHON" -m pgai_challenge.server > logs/server.log 2>&1 &
+SERVER_PID=$!
+
+# Quick check that local Flask is listening
+for ((i=1; i<=10; i++)); do
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "[run_call] ERROR: Initial Flask server failed to start. See logs/server.log:" >&2
+    tail -n 20 logs/server.log >&2
+    exit 1
+  fi
+  if curl -sf --connect-timeout 2 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+# 2. Start cloudflared tunnel
 echo "[run_call] Starting cloudflared tunnel on port $PORT..."
 rm -f logs/tunnel.log
-cloudflared tunnel --url "http://localhost:$PORT" > logs/tunnel.log 2>&1 &
+cloudflared tunnel --url "http://127.0.0.1:$PORT" > logs/tunnel.log 2>&1 &
 TUNNEL_PID=$!
 
 TUNNEL_URL=""
@@ -93,7 +112,7 @@ if [[ -z "$TUNNEL_URL" ]]; then
 fi
 echo "[run_call] Tunnel active: $TUNNEL_URL"
 
-# 2. Write PUBLIC_BASE_URL into .env
+# 3. Write PUBLIC_BASE_URL into .env
 echo "[run_call] Updating PUBLIC_BASE_URL in .env..."
 "$PYTHON" -c "
 import sys
@@ -119,18 +138,28 @@ with open('.env', 'w') as f:
     f.write('\n'.join(new_lines) + '\n')
 " "$TUNNEL_URL"
 
-# 3. Start Flask server
-echo "[run_call] Starting Flask server on port $PORT..."
-rm -f logs/server.log
+# 4. Restart Flask so it picks up the new PUBLIC_BASE_URL (do NOT restart tunnel)
+echo "[run_call] Restarting Flask server to pick up new PUBLIC_BASE_URL..."
+if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
+  kill "$SERVER_PID" 2>/dev/null || true
+  wait "$SERVER_PID" 2>/dev/null || true
+fi
+sleep 1
 PORT="$PORT" "$PYTHON" -m pgai_challenge.server > logs/server.log 2>&1 &
 SERVER_PID=$!
 
+# 5. Verify server health through tunnel (timeout 90s)
 echo "[run_call] Verifying server health through tunnel ($TUNNEL_URL/health)..."
 SERVER_OK=0
-for ((i=1; i<=30; i++)); do
+for ((i=1; i<=90; i++)); do
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-    echo "[run_call] ERROR: Flask server died. See logs/server.log:" >&2
+    echo "[run_call] ERROR: Flask server died after restart. See logs/server.log:" >&2
     tail -n 20 logs/server.log >&2
+    exit 1
+  fi
+  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+    echo "[run_call] ERROR: cloudflared tunnel died. See logs/tunnel.log:" >&2
+    tail -n 20 logs/tunnel.log >&2
     exit 1
   fi
   if curl -sf --connect-timeout 3 "$TUNNEL_URL/health" >/dev/null 2>&1; then
@@ -141,8 +170,11 @@ for ((i=1; i<=30; i++)); do
 done
 
 if [[ $SERVER_OK -ne 1 ]]; then
-  echo "[run_call] ERROR: Server never returned ok via tunnel ($TUNNEL_URL/health) after 30s. See logs/server.log:" >&2
-  tail -n 20 logs/server.log >&2
+  echo "[run_call] ERROR: Server never returned ok via tunnel ($TUNNEL_URL/health) after 90s." >&2
+  echo "--- logs/server.log (last 20 lines) ---" >&2
+  tail -n 20 logs/server.log >&2 || true
+  echo "--- logs/tunnel.log (last 20 lines) ---" >&2
+  tail -n 20 logs/tunnel.log >&2 || true
   exit 1
 fi
 echo "[run_call] Server verified healthy via tunnel."
