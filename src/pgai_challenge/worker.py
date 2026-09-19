@@ -96,9 +96,9 @@ def build_tts(settings, scenario):
             tts_kwargs["api_key"] = settings.cartesia_api_key
         if settings.tts_voice:
             tts_kwargs["voice"] = settings.tts_voice
-        return cartesia.TTS(**tts_kwargs)
+        tts_instance = cartesia.TTS(**tts_kwargs)
     elif settings.openai_api_key:
-        return openai.TTS(
+        tts_instance = openai.TTS(
             api_key=settings.openai_api_key,
             voice=settings.tts_voice
                   or ("nova" if scenario.voice == "female" else "onyx"),
@@ -109,6 +109,7 @@ def build_tts(settings, scenario):
             "OPENAI_API_KEY. GEMINI_API_KEY does NOT provide TTS: google.TTS() "
             "uses Google Cloud ADC, not an API key."
         )
+    return tts_instance
 
 
 async def entrypoint(ctx: JobContext):

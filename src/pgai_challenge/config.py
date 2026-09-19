@@ -84,7 +84,7 @@ def load_settings() -> Settings:
     def opt(name: str, default: str = "") -> str:
         return os.environ.get(name, default).strip()
 
-    return Settings(
+    settings = Settings(
         twilio_account_sid=req("TWILIO_ACCOUNT_SID"),
         twilio_auth_token=req("TWILIO_AUTH_TOKEN"),
         caller_number=req("TWILIO_CALLER_NUMBER"),
