@@ -51,6 +51,7 @@ class Settings:
     deepgram_api_key: str = ""
     openai_api_key: str = ""
     gemini_api_key: str = ""
+    cartesia_api_key: str = ""
     # Public HTTPS base URL of the Twilio webhook server (ngrok), no trailing slash
     public_base_url: str = ""
     # Optional test phone number for dry-run verification before calling assessment
@@ -96,6 +97,7 @@ def load_settings() -> Settings:
         deepgram_api_key=req("DEEPGRAM_API_KEY"),
         openai_api_key=opt("OPENAI_API_KEY"),
         gemini_api_key=opt("GEMINI_API_KEY"),
+        cartesia_api_key=opt("CARTESIA_API_KEY"),
         public_base_url=req("PUBLIC_BASE_URL").rstrip("/"),
         test_phone_number=opt("TEST_PHONE_NUMBER"),
         llm_provider=opt("LLM_PROVIDER"),

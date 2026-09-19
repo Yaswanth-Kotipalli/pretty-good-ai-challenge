@@ -26,7 +26,7 @@ from livekit.agents import (
 )
 from livekit.agents.inference import TurnDetector
 from livekit.agents.voice.turn import InterruptionOptions
-from livekit.plugins import deepgram, openai, silero
+from livekit.plugins import cartesia, deepgram, openai, silero
 try:
     from livekit.plugins import google
 except ImportError:
@@ -85,6 +85,32 @@ async def _transcript_pump(session, path, call_start, stop_event: asyncio.Event)
     logger.info("transcript finalized: %s", path.with_suffix(".txt"))
 
 
+def build_tts(settings, scenario):
+    if settings.cartesia_api_key:
+        # Do not pin `model` -- the plugin default tracks Cartesia's current
+        # best (sonic-3). ~90ms to first byte, and a phone-call cadence rather
+        # than the read-aloud cadence of OpenAI TTS. Their first evaluation
+        # step is listening to these calls.
+        tts_kwargs = {}
+        if settings.cartesia_api_key:
+            tts_kwargs["api_key"] = settings.cartesia_api_key
+        if settings.tts_voice:
+            tts_kwargs["voice"] = settings.tts_voice
+        return cartesia.TTS(**tts_kwargs)
+    elif settings.openai_api_key:
+        return openai.TTS(
+            api_key=settings.openai_api_key,
+            voice=settings.tts_voice
+                  or ("nova" if scenario.voice == "female" else "onyx"),
+        )
+    else:
+        raise RuntimeError(
+            "No TTS provider configured. Set CARTESIA_API_KEY (preferred) or "
+            "OPENAI_API_KEY. GEMINI_API_KEY does NOT provide TTS: google.TTS() "
+            "uses Google Cloud ADC, not an API key."
+        )
+
+
 async def entrypoint(ctx: JobContext):
     metadata = json.loads(ctx.job.metadata or "{}")
     scenario_id = metadata.get("scenario_id")
@@ -120,13 +146,7 @@ async def entrypoint(ctx: JobContext):
             model=settings.llm_model, api_key=settings.openai_api_key
         )
 
-    tts_voice = settings.tts_voice or ("nova" if scenario.voice == "female" else "onyx")
-    if settings.openai_api_key:
-        tts_instance = openai.TTS(api_key=settings.openai_api_key, voice=tts_voice)
-    elif settings.gemini_api_key and google is not None:
-        tts_instance = google.TTS()
-    else:
-        tts_instance = openai.TTS(api_key=settings.openai_api_key, voice=tts_voice)
+    tts_instance = build_tts(settings, scenario)
 
     session = AgentSession(
         stt=deepgram.STT(
