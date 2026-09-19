@@ -26,7 +26,7 @@ Several scenarios include a mid-call twist the patient introduces naturally afte
 exchanges, so calls don't run on rails. The patient persona — identity, goal, conversational
 quirks — lives in the LLM instructions, not a script, so it steers toward the test outcome
 while reacting naturally. A `hang_up` function tool lets the patient end the call when its
-goal is done; a 4-minute cap and 12-turn cap bound every call. A guardrail hardcoded to the
+goal is done; a 4-minute hard cap bounds every call. A guardrail hardcoded to the
 assessment number is checked before every outbound dial, so the bot can never call any
 other number.
 

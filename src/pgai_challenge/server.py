@@ -28,12 +28,20 @@ def create_app(settings=None):
         """TwiML for the outbound leg: answer -> bridge into LiveKit via SIP."""
         resp = VoiceResponse()
         dial = Dial(
-            record="record-from-answer",
+            # Dual-channel: our patient bot and the clinic agent land on
+            # separate channels, so a bug report can attribute every line
+            # without guessing from a mono mixdown.
+            record="record-from-answer-dual",
             recording_status_callback=(
                 f"{settings.public_base_url}/recording-callback"
                 f"?scenario_id={scenario_id}"
             ),
             recording_status_callback_method="POST",
+            # Without an action URL, TwiML falls through to the next verb when
+            # the bridge ends NORMALLY -- so the clinic agent heard the failure
+            # message at the end of every successful call.
+            action=f"{settings.public_base_url}/after-dial",
+            method="POST",
         )
         sip_uri = f"sip:{ROOM_NAME}@{settings.sip_host}"
         if settings.sip_trunk_user:
@@ -45,8 +53,16 @@ def create_app(settings=None):
         else:
             dial.sip(sip_uri)
         resp.append(dial)
-        # If the SIP leg fails, don't leave dead air.
-        resp.say("Sorry, the test system is unavailable. Goodbye.")
+        return Response(str(resp), mimetype="text/xml")
+
+    @app.post("/after-dial")
+    def after_dial():
+        """Runs once the <Dial> bridge ends. Only speak on an actual failure."""
+        status = request.form.get("DialCallStatus", "")
+        resp = VoiceResponse()
+        if status != "completed":
+            logger.warning("dial ended with status %s", status)
+            resp.say("Sorry, the test system is unavailable. Goodbye.")
         resp.hangup()
         return Response(str(resp), mimetype="text/xml")
 

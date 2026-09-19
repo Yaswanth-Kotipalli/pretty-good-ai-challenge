@@ -13,7 +13,6 @@ ASSESSMENT_NUMBER = "+18054398008"
 ROOM_NAME = "pgai-test"
 """Fixed LiveKit room every test call is routed into (sequential calls)."""
 
-MAX_TURNS_DEFAULT = 12
 MAX_CALL_SECONDS = 240  # hard stop per call: 4 minutes
 
 
@@ -48,14 +47,12 @@ class Settings:
     # Pipeline providers (separate STT / LLM / TTS - no realtime models)
     deepgram_api_key: str = ""
     openai_api_key: str = ""
-    cartesia_api_key: str = ""  # optional; falls back to OpenAI TTS if empty
     # Public HTTPS base URL of the Twilio webhook server (ngrok), no trailing slash
     public_base_url: str = ""
     # Model choices
     llm_model: str = "gpt-4o-mini"
     analyzer_model: str = "gpt-4o-mini"
     tts_voice: str = ""  # provider-specific voice id; empty = plugin default
-    max_turns: int = MAX_TURNS_DEFAULT
     max_call_seconds: int = MAX_CALL_SECONDS
 
 
@@ -91,7 +88,6 @@ def load_settings() -> Settings:
         sip_trunk_password=opt("SIP_TRUNK_PASSWORD"),
         deepgram_api_key=req("DEEPGRAM_API_KEY"),
         openai_api_key=req("OPENAI_API_KEY"),
-        cartesia_api_key=opt("CARTESIA_API_KEY"),
         public_base_url=req("PUBLIC_BASE_URL").rstrip("/"),
         llm_model=opt("LLM_MODEL", "gpt-4o-mini"),
         analyzer_model=opt("ANALYZER_MODEL", "gpt-4o-mini"),

@@ -25,7 +25,6 @@ class Scenario:
     opening_line: str  # first thing the patient says after the greeting
     quirks: list = field(default_factory=list)  # natural behaviors, not scripts
     voice: str = "female"  # hint for TTS voice selection
-    max_turns: int = 12
     # Mid-call deviation: a development the patient introduces naturally after
     # ~twist_after_turns exchanges, so the call isn't a straight line to the
     # goal. Empty = no twist.
