@@ -213,19 +213,21 @@ def main():
         print(f"Error: Unknown scenario '{args.scenario}'. Use --list to view valid scenarios.")
         sys.exit(1)
 
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        env_file = Path(".env")
-        if env_file.exists():
-            for line in env_file.read_text(encoding="utf-8").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-                    break
+    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
-    if not api_key:
-        print("\n[Notice] No OPENAI_API_KEY found in environment or .env.")
-        print("To run the live interactive/automated demo with GPT-4o-mini, set your key:")
-        print("  export OPENAI_API_KEY='sk-...'")
+    env_file = Path(".env")
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("OPENAI_API_KEY=") and not openai_key:
+                openai_key = line.split("=", 1)[1].strip()
+            elif line.startswith("GEMINI_API_KEY=") and not gemini_key:
+                gemini_key = line.split("=", 1)[1].strip()
+
+    if not (openai_key or gemini_key):
+        print("\n[Notice] Neither OPENAI_API_KEY nor GEMINI_API_KEY found in environment or .env.")
+        print("To run the live interactive/automated demo, set your key:")
+        print("  export GEMINI_API_KEY='AIza...'  # OR: export OPENAI_API_KEY='sk-...'")
         print("\nDisplaying scenario prompt preview instead:")
         print("-" * 65)
         print(build_instructions(scenario))
@@ -233,12 +235,27 @@ def main():
         return
 
     from openai import OpenAI
-    client = OpenAI(api_key=api_key)
+
+    if gemini_key and not openai_key:
+        print("[Engine: Google Gemini (generativelanguage.googleapis.com)]")
+        client = OpenAI(
+            api_key=gemini_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        model = (
+            args.model
+            if args.model != "gpt-4o-mini"
+            else "gemini-2.0-flash"
+        )
+    else:
+        print("[Engine: OpenAI]")
+        client = OpenAI(api_key=openai_key)
+        model = args.model
 
     if args.auto:
-        run_auto(scenario, client, args.model)
+        run_auto(scenario, client, model)
     else:
-        run_interactive(scenario, client, args.model)
+        run_interactive(scenario, client, model)
 
 
 if __name__ == "__main__":

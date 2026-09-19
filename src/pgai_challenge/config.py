@@ -51,13 +51,15 @@ class Settings:
     # Pipeline providers (separate STT / LLM / TTS - no realtime models)
     deepgram_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     cartesia_api_key: str = ""  # optional; falls back to OpenAI TTS if empty
     # Public HTTPS base URL of the Twilio webhook server (ngrok), no trailing slash
     public_base_url: str = ""
     # Optional test phone number for dry-run verification before calling assessment
     test_phone_number: str = ""
     # Model choices
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: str = ""  # "openai" or "google"; auto-detected if empty
+    llm_model: str = ""  # default depends on provider (gpt-4o-mini or gemini-2.0-flash)
     analyzer_model: str = "gpt-4o-mini"
     tts_voice: str = ""  # provider-specific voice id; empty = plugin default
     max_turns: int = MAX_TURNS_DEFAULT
@@ -95,11 +97,29 @@ def load_settings() -> Settings:
         sip_trunk_user=opt("SIP_TRUNK_USER"),
         sip_trunk_password=opt("SIP_TRUNK_PASSWORD"),
         deepgram_api_key=req("DEEPGRAM_API_KEY"),
-        openai_api_key=req("OPENAI_API_KEY"),
+        openai_api_key=opt("OPENAI_API_KEY"),
+        gemini_api_key=opt("GEMINI_API_KEY"),
         cartesia_api_key=opt("CARTESIA_API_KEY"),
         public_base_url=req("PUBLIC_BASE_URL").rstrip("/"),
         test_phone_number=opt("TEST_PHONE_NUMBER"),
-        llm_model=opt("LLM_MODEL", "gpt-4o-mini"),
-        analyzer_model=opt("ANALYZER_MODEL", "gpt-4o-mini"),
+        llm_provider=opt("LLM_PROVIDER"),
+        llm_model=opt("LLM_MODEL"),
+        analyzer_model=opt("ANALYZER_MODEL"),
         tts_voice=opt("TTS_VOICE"),
     )
+    # Validate LLM credentials
+    if not (settings.openai_api_key or settings.gemini_api_key):
+        raise RuntimeError(
+            "Must provide either OPENAI_API_KEY or GEMINI_API_KEY in .env."
+        )
+
+    if not settings.llm_provider:
+        settings.llm_provider = "google" if (settings.gemini_api_key and not settings.openai_api_key) else "openai"
+
+    if not settings.llm_model:
+        settings.llm_model = "gemini-2.0-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
+
+    if not settings.analyzer_model:
+        settings.analyzer_model = "gemini-2.0-flash" if settings.llm_provider == "google" else "gpt-4o-mini"
+
+    return settings

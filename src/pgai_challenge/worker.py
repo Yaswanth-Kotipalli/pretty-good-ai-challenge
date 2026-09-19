@@ -27,6 +27,10 @@ from livekit.agents import (
 from livekit.agents.inference import TurnDetector
 from livekit.agents.voice.turn import InterruptionOptions
 from livekit.plugins import deepgram, openai, silero
+try:
+    from livekit.plugins import google
+except ImportError:
+    google = None
 
 from . import transcripts
 from .agent import PatientAgent
@@ -95,13 +99,34 @@ async def entrypoint(ctx: JobContext):
     hangup = asyncio.Event()
     agent = PatientAgent(scenario, hangup)
 
+    if settings.llm_provider == "google":
+        if google is None:
+            raise RuntimeError(
+                "livekit-plugins-google is required for Gemini LLM. "
+                "Run 'pip install livekit-plugins-google'."
+            )
+        llm_instance = google.LLM(
+            model=settings.llm_model, api_key=settings.gemini_api_key
+        )
+    else:
+        llm_instance = openai.LLM(
+            model=settings.llm_model, api_key=settings.openai_api_key
+        )
+
     tts_voice = settings.tts_voice or ("nova" if scenario.voice == "female" else "onyx")
+    if settings.openai_api_key:
+        tts_instance = openai.TTS(api_key=settings.openai_api_key, voice=tts_voice)
+    elif settings.gemini_api_key and google is not None:
+        tts_instance = google.TTS()
+    else:
+        tts_instance = openai.TTS(api_key=settings.openai_api_key, voice=tts_voice)
+
     session = AgentSession(
         stt=deepgram.STT(
             api_key=settings.deepgram_api_key, model="nova-3", language="en-US"
         ),
-        llm=openai.LLM(model=settings.llm_model, api_key=settings.openai_api_key),
-        tts=openai.TTS(api_key=settings.openai_api_key, voice=tts_voice),
+        llm=llm_instance,
+        tts=tts_instance,
         vad=silero.VAD.load(),
         # Semantic end-of-turn: waits for a completed thought, not just
         # silence. Raw VAD endpointing talks over the clinic agent's
