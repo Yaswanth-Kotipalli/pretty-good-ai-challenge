@@ -8,22 +8,35 @@ The bot conducts realistic, multi-turn clinical voice calls across 14 diverse sc
 
 ## System Architecture
 
-```
-                                      +---------------------------------------------+
-                                      |            LiveKit Cloud Room               |
-                                      |                 (pgai-test)                 |
-                                      |                                             |
-[Pretty Good AI]                      |   +-------------------------------------+   |
-[Clinic Agent  ] <=== PSTN ===> [Twilio SIP] <==> | PatientAgent (LiveKit Worker)       |   |
-(+1-805-439-8008)               (Carrier & |   |  - STT: Deepgram Nova-3             |   |
-                                 Recorder) |   |  - LLM: GPT-4o-mini (Persona Brain) |   |
-                                           |   |  - TTS: OpenAI TTS / Cartesia       |   |
-                                           |   |  - Turn: Semantic TurnDetector      |   |
-                                           |   |  - VAD: Silero                      |   |
-                                           |   |  - Interruption: Enabled (Barge-in) |   |
-                                           |   |  - Tool: hang_up()                  |   |
-                                           |   +-------------------------------------+   |
-                                      +---------------------------------------------+
+```mermaid
+flowchart LR
+    subgraph Target ["Assessment Target"]
+        PGAI["Pretty Good AI Clinic Agent (+1-805-439-8008)"]
+    end
+
+    subgraph Telephony ["PSTN Carrier & Recorder"]
+        TW["Twilio Voice: Dials Target, Records Audio, Bridges SIP"]
+    end
+
+    subgraph LiveKitCloud ["LiveKit Cloud (Room: pgai-test)"]
+        SIP["Inbound SIP Endpoint"]
+        subgraph Pipeline ["PatientAgent Worker (Pipeline Mode)"]
+            STT["STT: Deepgram Nova-3"]
+            VAD["VAD & Turn: Silero + Semantic TurnDetector"]
+            LLM["LLM: GPT-4o-mini (Persona Brain)"]
+            TTS["TTS: OpenAI TTS / Cartesia"]
+            TOOL["Tool: hang_up()"]
+        end
+    end
+
+    PGAI <--> TW
+    TW <--> SIP
+    SIP <--> STT
+    STT --> VAD
+    VAD --> LLM
+    LLM --> TTS
+    LLM -.-> TOOL
+    TTS --> SIP
 ```
 
 ### Pipeline Mode vs. Prohibited Architectures

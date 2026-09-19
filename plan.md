@@ -8,22 +8,63 @@ This document provides a complete audit of the **Pretty Good AI — Patient Simu
 
 The codebase is built specifically to fulfill the requirements of the Pretty Good AI AI Engineering Challenge:
 
+```mermaid
+flowchart LR
+    subgraph Target ["Assessment Target"]
+        PGAI["Pretty Good AI Clinic Agent (+1-805-439-8008)"]
+    end
+
+    subgraph Telephony ["PSTN Carrier & Recorder"]
+        TW["Twilio Voice: Dials Target, Records Audio, Bridges SIP"]
+    end
+
+    subgraph LiveKitCloud ["LiveKit Cloud (Room: pgai-test)"]
+        SIP["Inbound SIP Endpoint"]
+        subgraph Pipeline ["PatientAgent Worker (Pipeline Mode)"]
+            STT["STT: Deepgram Nova-3"]
+            VAD["VAD & Turn: Silero + Semantic TurnDetector"]
+            LLM["LLM: GPT-4o-mini (Persona Brain)"]
+            TTS["TTS: OpenAI TTS / Cartesia"]
+            TOOL["Tool: hang_up()"]
+        end
+    end
+
+    PGAI <--> TW
+    TW <--> SIP
+    SIP <--> STT
+    STT --> VAD
+    VAD --> LLM
+    LLM --> TTS
+    LLM -.-> TOOL
+    TTS --> SIP
 ```
-                                  +-------------------------------------------------------------+
-                                  |                       LiveKit Cloud                         |
-                                  |                     Room: `pgai-test`                       |
-                                  |                                                             |
-[Pretty Good AI]                  |   +-----------------------------------------------------+   |
-[Clinic Voice Agent] <== PSTN ==> |   | PatientAgent (LiveKit Worker - Pipeline Mode)       |   |
-(+1-805-439-8008)       [Twilio]  |   |  - STT: Deepgram Nova-3                             |   |
-                     (Carrier &   |   |  - LLM: GPT-4o-mini (Persona & Goal Roleplay)       |   |
-                     Recorder)    |   |  - TTS: OpenAI TTS / Cartesia                       |   |
-                                  |   |  - Turn: Semantic TurnDetector                      |   |
-                                  |   |  - VAD: Silero                                      |   |
-                                  |   |  - Interruption: Enabled (Remote Barge-in Allowed)  |   |
-                                  |   |  - Function Tool: hang_up()                         |   |
-                                  |   +-----------------------------------------------------+   |
-                                  +-------------------------------------------------------------+
+
+### Call Lifecycle Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Runner as runner.py
+    participant LK as LiveKit Cloud (pgai-test)
+    participant Worker as worker.py (PatientAgent)
+    participant Twilio as Twilio PSTN
+    participant Clinic as Clinic Agent (+1-805-439-8008)
+    participant Server as server.py (Flask Webhook)
+
+    Runner->>LK: Ensure Room (pgai-test)
+    Runner->>LK: Dispatch Agent with scenario metadata
+    Worker->>LK: Connect & Join Room
+    Runner->>Twilio: Place Call to Clinic
+    Twilio->>Clinic: Dial +1-805-439-8008
+    Clinic-->>Twilio: Answer Call
+    Twilio->>Server: Fetch TwiML (/twiml/scenario_id)
+    Server-->>Twilio: Return TwiML with Dial Sip and record-from-answer
+    Twilio->>LK: Bridge Audio via SIP
+    Note over Worker,Clinic: Realtime Conversation: STT to TurnDetector to LLM to TTS
+    Worker->>Worker: Execute hang_up() tool when goal is reached
+    Worker->>LK: Disconnect & Finalize Transcript
+    Twilio->>Server: Send Recording Callback (pending.jsonl)
+    Runner->>Runner: Save status to run_manifest.json
 ```
 
 ### Architectural Decisions & Rationale
