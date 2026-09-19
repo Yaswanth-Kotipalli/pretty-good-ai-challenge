@@ -44,10 +44,15 @@ async def dispatch_worker(lk, scenario_id: str):
     )
 
 
-def place_call(twilio: TwilioClient, settings, scenario_id: str) -> str:
-    assert_safe_to_dial(ASSESSMENT_NUMBER)  # hard guardrail, every call
+def place_call(
+    twilio: TwilioClient, settings, scenario_id: str, target_number: str = ""
+) -> str:
+    target = target_number or settings.test_phone_number or ASSESSMENT_NUMBER
+    assert_safe_to_dial(
+        target, allowed_test_number=settings.test_phone_number or target_number
+    )
     call = twilio.calls.create(
-        to=ASSESSMENT_NUMBER,
+        to=target,
         from_=settings.caller_number,
         url=f"{settings.public_base_url}/twiml/{scenario_id}",
         method="POST",
@@ -68,17 +73,21 @@ def wait_for_call(twilio: TwilioClient, call_sid: str, timeout_s: int = 420) -> 
     return "timeout"
 
 
-async def run_scenario(settings, twilio, lk, scenario_id: str) -> dict:
+async def run_scenario(
+    settings, twilio, lk, scenario_id: str, target_number: str = ""
+) -> dict:
     await ensure_room(lk)
     await dispatch_worker(lk, scenario_id)
     await asyncio.sleep(8)  # let the worker join the room first
-    call_sid = place_call(twilio, settings, scenario_id)
-    print(f"[{scenario_id}] call {call_sid} placed, waiting for it to finish...")
+    call_sid = place_call(twilio, settings, scenario_id, target_number=target_number)
+    target_display = target_number or settings.test_phone_number or ASSESSMENT_NUMBER
+    print(f"[{scenario_id}] call {call_sid} placed to {target_display}, waiting for completion...")
     final = await asyncio.to_thread(wait_for_call, twilio, call_sid)
     print(f"[{scenario_id}] ended: {final}")
     return {
         "scenario_id": scenario_id,
         "call_sid": call_sid,
+        "target_number": target_display,
         "final_status": final,
         "at": datetime.now(timezone.utc).isoformat(),
     }
@@ -86,13 +95,19 @@ async def run_scenario(settings, twilio, lk, scenario_id: str) -> dict:
 
 async def amain(args) -> None:
     settings = load_settings()
+    if args.test_number:
+        settings.test_phone_number = args.test_number.strip()
     twilio = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
     lk = lk_client(settings)
     try:
         ids = [s.id for s in SCENARIOS] if args.all else [args.scenario]
         manifest = []
         for i, sid in enumerate(ids):
-            manifest.append(await run_scenario(settings, twilio, lk, sid))
+            manifest.append(
+                await run_scenario(
+                    settings, twilio, lk, sid, target_number=settings.test_phone_number
+                )
+            )
             if i < len(ids) - 1:
                 print(f"cooling down {args.delay}s before next call...")
                 await asyncio.sleep(args.delay)
@@ -111,6 +126,10 @@ def main() -> None:
     ap.add_argument("--scenario", help="run a single scenario id")
     ap.add_argument("--all", action="store_true", help="run all scenarios sequentially")
     ap.add_argument("--delay", type=int, default=20, help="cooldown seconds between calls")
+    ap.add_argument(
+        "--test-number",
+        help="dial an approved personal/test phone number (E.164, e.g. +13334445555)",
+    )
     args = ap.parse_args()
     if args.list:
         for s in SCENARIOS:

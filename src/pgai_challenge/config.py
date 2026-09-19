@@ -21,13 +21,16 @@ class UnsafeDialError(ValueError):
     """Raised when code attempts to dial anything other than the assessment line."""
 
 
-def assert_safe_to_dial(number: str) -> None:
-    """Hard guardrail: only the assessment line may ever be dialed."""
-    if number != ASSESSMENT_NUMBER:
-        raise UnsafeDialError(
-            f"Refusing to dial {number!r}: this project may only call "
-            f"the assessment line {ASSESSMENT_NUMBER}."
-        )
+def assert_safe_to_dial(number: str, allowed_test_number: str = "") -> None:
+    """Hard guardrail: only the assessment line or an explicitly approved test number may be dialed."""
+    if number == ASSESSMENT_NUMBER:
+        return
+    if allowed_test_number and number == allowed_test_number:
+        return
+    raise UnsafeDialError(
+        f"Refusing to dial {number!r}: this project may only call "
+        f"the assessment line {ASSESSMENT_NUMBER}."
+    )
 
 
 @dataclass
@@ -51,6 +54,8 @@ class Settings:
     cartesia_api_key: str = ""  # optional; falls back to OpenAI TTS if empty
     # Public HTTPS base URL of the Twilio webhook server (ngrok), no trailing slash
     public_base_url: str = ""
+    # Optional test phone number for dry-run verification before calling assessment
+    test_phone_number: str = ""
     # Model choices
     llm_model: str = "gpt-4o-mini"
     analyzer_model: str = "gpt-4o-mini"
@@ -93,6 +98,7 @@ def load_settings() -> Settings:
         openai_api_key=req("OPENAI_API_KEY"),
         cartesia_api_key=opt("CARTESIA_API_KEY"),
         public_base_url=req("PUBLIC_BASE_URL").rstrip("/"),
+        test_phone_number=opt("TEST_PHONE_NUMBER"),
         llm_model=opt("LLM_MODEL", "gpt-4o-mini"),
         analyzer_model=opt("ANALYZER_MODEL", "gpt-4o-mini"),
         tts_voice=opt("TTS_VOICE"),
