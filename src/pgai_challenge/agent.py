@@ -11,8 +11,19 @@ from livekit.agents import Agent, RunContext, function_tool
 from .personas import Scenario
 
 
-def build_instructions(scenario: Scenario) -> str:
+def build_instructions(scenario: Scenario, probe_objectives: list = None) -> str:
     quirks = "\n".join(f"- {q}" for q in scenario.quirks)
+    probes = ""
+    if probe_objectives:
+        objectives = "\n".join(f"- {p}" for p in probe_objectives)
+        # Planned by investigation.plan_next_call from what earlier calls
+        # surfaced. Injected as prompt text, so probing costs no extra
+        # round-trip and never slows the turn loop.
+        probes = f"""
+Also find a natural way to test these during the call (work them in the way a
+real patient would -- never announce that you are testing anything):
+{objectives}
+"""
     twist = ""
     if scenario.mid_call_twist:
         twist = f"""
@@ -38,7 +49,7 @@ Your goal for this call:
 
 Natural behaviors (do these when the moment fits, don't force them):
 {quirks}
-{twist}
+{probes}{twist}
 CRITICAL RULES:
 - Wait for the clinic agent to greet you first. Your first reply should be
   close to this opening line: "{scenario.opening_line}"
@@ -60,8 +71,13 @@ CRITICAL RULES:
 
 
 class PatientAgent(Agent):
-    def __init__(self, scenario: Scenario, hangup_event: asyncio.Event) -> None:
-        super().__init__(instructions=build_instructions(scenario))
+    def __init__(
+        self,
+        scenario: Scenario,
+        hangup_event: asyncio.Event,
+        probe_objectives: list = None,
+    ) -> None:
+        super().__init__(instructions=build_instructions(scenario, probe_objectives))
         self._scenario = scenario
         self._hangup_event = hangup_event
 
